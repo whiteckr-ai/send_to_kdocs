@@ -1,31 +1,90 @@
-name: KDocs Daily Trigger
+name: bq-to-kdocs
 
 on:
+  workflow_dispatch: {}
   schedule:
-    - cron: '0 23 * * 0-4'
-  workflow_dispatch:
+    - cron: "45 * * * *"   # UTC 기준, 필요시 조정
 
 jobs:
-  update-kdocs:
+  export-and-upload:
     runs-on: ubuntu-latest
     steps:
-      # 1. 저장소 파일 가져오기 (send_to_kdocs.py 실행을 위해 필수입니다)
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      # 1) GCP 인증
+      - name: Auth to GCP
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+
+      # 2) gcloud/bq 설치
+      - name: Install gcloud & bq
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          install_components: bq
+
+      # (선택) 진단
+      - name: Check gcloud/bq
+        run: |
+          gcloud --version
+          bq version
+          gcloud auth list
+          gcloud config list
+
+      # (선택) 스모크 테스트
+      - name: Smoke test - SELECT 1
+        run: |
+          bq query \
+            --project_id="${{ secrets.GCP_PROJECT_ID }}" \
+            --location=asia-northeast3 \
+            --nouse_legacy_sql \
+            --format=csv \
+            "SELECT 1 AS ok"
+
+      # 3) BigQuery → CSV 추출
+      - name: Export BigQuery result to CSV (robust)
+        env:
+          BQ_SQL: ${{ secrets.BQ_SQL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BQ_SQL:-}" ]; then
+            echo "ERROR: BQ_SQL secret is empty."; exit 1
+          fi
+          printf '%s' "$BQ_SQL" > /tmp/query.sql
+          mkdir -p /tmp/export
+          bq query \
+            --project_id="${{ secrets.GCP_PROJECT_ID }}" \
+            --location=asia-northeast3 \
+            --nouse_legacy_sql \
+            --format=csv \
+            --max_rows=1000000000 \
+            < /tmp/query.sql | tee /tmp/export/bq_export.csv > /dev/null
+
+      - name: Check CSV row count & size
+        run: |
+          ls -l /tmp/export/bq_export.csv || true
+          echo "Line count (including header):"
+          wc -l /tmp/export/bq_export.csv || true
+          echo "Head:"; head -n 3 /tmp/export/bq_export.csv || true
+          echo "Tail:"; tail -n 3 /tmp/export/bq_export.csv || true
 
       # =========================================================
-      # 🚨 주의: 이 아래에 이사님이 원래 쓰시던 
-      # [BigQuery에서 데이터를 추출해서 result.csv로 만드는 단계]를 넣어주세요.
+      # 4) KDocs 연동 시작 (여기서부터 새로 추가된 부분)
       # =========================================================
-      
-      
-      # 3. 파이썬 통신 라이브러리 설치
+
       - name: Install Python dependencies
         run: pip install --quiet requests
 
-      # 4. KDocs로 데이터 전송
       - name: Send CSV Data to KDocs
         env:
+          # 발급받은 스크립트 토큰과 문서 ID
           KDOCS_TOKEN: "7i1UmJgwNz3l5HWuzQZh4Y"  
           KDOCS_FILE_ID: "cvViOvb7vj6x" 
-        run: python send_to_kdocs.py
+        run: |
+          # 추출된 CSV 파일을 파이썬 스크립트가 읽을 수 있도록 result.csv로 복사
+          cp /tmp/export/bq_export.csv result.csv
+          
+          # KDocs 전송 파이썬 스크립트 실행
+          python send_to_kdocs.py
