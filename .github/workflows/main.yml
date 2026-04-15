@@ -5,8 +5,7 @@
 
       - name: Send CSV Data to KDocs
         env:
-          # 여기에 캡처 화면의 토큰과 주소창의 파일 ID를 넣어줍니다.
-          # (GitHub Secrets에 등록하고 쓰는 것을 권장하지만, 테스트 시엔 직접 넣으셔도 됩니다)
-          KDOCS_TOKEN: "T0xxxxxxxxxxxxxxxxxx"  
-          KDOCS_FILE_ID: "여기에_주소창에_있는_문서ID_넣기" 
+          # 발급받은 스크립트 토큰과 문서 ID 적용 완료
+          KDOCS_TOKEN: "7i1UmJgwNz3l5HWuzQZh4Y"  
+          KDOCS_FILE_ID: "cvViOvb7vj6x" 
         run: python send_to_kdocs.py
