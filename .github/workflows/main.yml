@@ -1,11 +1,31 @@
-# (이전 단계: BigQuery -> CSV 추출 완료)
+name: KDocs Daily Trigger
 
+on:
+  schedule:
+    - cron: '0 23 * * 0-4'
+  workflow_dispatch:
+
+jobs:
+  update-kdocs:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. 저장소 파일 가져오기 (send_to_kdocs.py 실행을 위해 필수입니다)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # =========================================================
+      # 🚨 주의: 이 아래에 이사님이 원래 쓰시던 
+      # [BigQuery에서 데이터를 추출해서 result.csv로 만드는 단계]를 넣어주세요.
+      # =========================================================
+      
+      
+      # 3. 파이썬 통신 라이브러리 설치
       - name: Install Python dependencies
         run: pip install --quiet requests
 
+      # 4. KDocs로 데이터 전송
       - name: Send CSV Data to KDocs
         env:
-          # 발급받은 스크립트 토큰과 문서 ID 적용 완료
           KDOCS_TOKEN: "7i1UmJgwNz3l5HWuzQZh4Y"  
           KDOCS_FILE_ID: "cvViOvb7vj6x" 
         run: python send_to_kdocs.py
