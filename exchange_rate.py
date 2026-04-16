@@ -46,7 +46,11 @@ def send_to_kdocs(rate):
     
     # KDocs로 보낼 데이터 구조 (JSON)
     payload = {
-        "cny_rate": rate
+        "Context": {
+            "argv": {
+                "cny_rate": rate
+            }
+        }
     }
     
     headers = {
