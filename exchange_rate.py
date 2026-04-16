@@ -2,55 +2,71 @@ import requests
 import xml.etree.ElementTree as ET
 from datetime import datetime
 import urllib3
+import json
 
 # SSL 인증서 경고 숨기기
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-def test_customs_rate_unipass():
-    # 1. 발급받으신 유니패스 인증키 입력
+def get_customs_rate():
+    # 💡 발급받으신 인증키를 여기에 다시 입력해 주세요
     api_key = "k250k246v024z146n060b070c0"
-    
-    # 2. 오늘 날짜 (YYYYMMDD 형식)
     today = datetime.now().strftime('%Y%m%d')
-    
-    # 3. 가이드에 명시된 정확한 URL 및 포트(38010) 
     url = "https://unipass.customs.go.kr:38010/ext/rest/trifFxrtInfoQry/retrieveTrifFxrtInfo"
     
-    # 4. 가이드에 명시된 파라미터 규격 [cite: 916, 921]
     params = {
         'crkyCn': api_key,
         'qryYymmDd': today,
-        'imexTp': '2'  # 2: 수입, 1: 수출 
+        'imexTp': '2' # 수입
     }
     
     try:
-        # 포트 38010 통신 및 관세청 사설 인증서 충돌 방지를 위해 verify=False 유지
         response = requests.get(url, params=params, verify=False, timeout=15)
         response.encoding = 'utf-8'
-        
-        # XML 파싱
         root = ET.fromstring(response.content)
         
-        # 5. 응답 결과 확인 (tCnt가 -1 이면 에러) [cite: 1348]
-        tcnt = root.find('.//tCnt')
-        if tcnt is not None and tcnt.text == '-1':
-            error_msg = root.find('.//ntceInfo').text
-            print(f"❌ API 호출 에러: {error_msg}")
-            return
-
-        # 6. 가이드에 명시된 응답 태그(<trifFxrtInfoQryRsltVo>) 파싱 [cite: 921]
+        # XML에서 위안화(CNY) 환율만 추출
         for item in root.findall('.//trifFxrtInfoQryRsltVo'):
             curr = item.find('currSgn')
-            
-            # 통화코드가 CNY(위안화)인 경우 값 추출 [cite: 918]
             if curr is not None and curr.text == 'CNY':
-                rate = item.find('fxrt').text
-                print(f"✅ 테스트 성공! 오늘의 위안화(CNY) 수입 고시환율: {rate}원")
-                return
+                return item.find('fxrt').text
                 
-        print("❌ 위안화 환율 데이터를 찾을 수 없습니다. (응답은 성공함)")
+        print("❌ 위안화 환율 데이터를 찾을 수 없습니다.")
+        return None
         
     except Exception as e:
-        print(f"❌ 시스템 에러 발생: {e}")
+        print(f"❌ 관세청 API 호출 에러: {e}")
+        return None
 
-test_customs_rate_unipass()
+def send_to_kdocs(rate):
+    if not rate:
+        return
+        
+    # 대표님이 제공해주신 KDocs 웹훅 URL
+    webhook_url = "https://www.kdocs.cn/api/v3/ide/file/cicR4yEidFqj/script/V2-pgD1PCjAOrmRh8WkVvZx8/sync_task"
+    
+    # KDocs로 보낼 데이터 구조 (JSON)
+    payload = {
+        "cny_rate": rate
+    }
+    
+    headers = {
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.post(webhook_url, json=payload, headers=headers)
+        
+        if response.status_code == 200:
+            print(f"✅ KDocs 웹훅 전송 성공! 반영된 환율: {rate}원")
+        else:
+            print(f"❌ KDocs 전송 실패: {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"❌ KDocs 연동 에러 발생: {e}")
+
+if __name__ == "__main__":
+    print("🔄 관세청 고시환율 조회를 시작합니다...")
+    cny_rate = get_customs_rate()
+    
+    if cny_rate:
+        print(f"수신된 환율: {cny_rate} -> KDocs로 전송합니다.")
+        send_to_kdocs(cny_rate)
