@@ -50,7 +50,9 @@ def send_to_kdocs(rate):
     }
     
     headers = {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "AirScript-Token": "1Vg353OyhzW3n27xfSZKUh" # 💡 이 줄이 반드시 추가되어야 합니다.
+        
     }
     
     try:
