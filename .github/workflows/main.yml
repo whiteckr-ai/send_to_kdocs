@@ -26,4 +26,4 @@ jobs:
         pip install -r requirements.txt
 
     - name: 환율 연동 파이썬 스크립트 실행
-      run: python main.py
+      run: python exchange_rate.py
